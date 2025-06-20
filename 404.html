@@ -1,126 +1,232 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh">
 <head>
-	<meta charset="UTF-8">
-	<title>能不能好好说话？</title>
-	<link rel="stylesheet" href="document.css">
-	<meta name="viewport" content="width=device-width,user-scalable=0">
-	<meta name="description" content="拼音首字母缩写释义工具">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>本周工作时长记录器</title>
+  <style>
+    body { font-family: sans-serif; padding: 2rem; max-width: 800px; margin: auto; }
+    h1 { font-size: 1.5rem; margin-bottom: 1rem; }
+    button { margin: 0.5rem 0.5rem 0.5rem 0; padding: 0.5rem 1rem; font-size: 1rem; }
+    table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+    th, td { border: 1px solid #ccc; padding: 0.5rem; text-align: center; }
+    .summary { margin-top: 1rem; padding: 1rem; border: 1px solid #ccc; background: #f8f8f8; }
+    .time-input { width: 4rem; }
+    .delete-btn { color: red; cursor: pointer; }
+    .editable { background-color: #eef; cursor: pointer; }
+    input.inline-edit { width: 4rem; }
+  </style>
 </head>
 <body>
-	<div id="el">
-		<textarea v-model.trim="text" placeholder="输入含有首字母缩写的文字" @input="nbnhhsh"></textarea>
-		<div class="nbnhhsh-box nbnhhsh-box-doc">
-			<div class="nbnhhsh-loading" v-if="loading">
-				加载中…
-			</div>
-			<div class="nbnhhsh-tag-list" v-else-if="tags.length">
-				<div class="nbnhhsh-tag-item" v-for="tag in tags">
-					<h4>{{tag.name}}</h4>
-					<div class="nbnhhsh-tran-list" v-if="tag.trans">
-						<span class="nbnhhsh-tran-item" v-for="tran in transArrange(tag.trans)">
-							{{tran.text}}<sub v-if="tran.sub">{{tran.sub}}</sub>
-						</span>
-					</div>
-					<div class="nbnhhsh-notran-box" v-else-if="tag.trans===null">
-						无对应文字
-					</div>
-					<div v-else-if="tag.inputting && tag.inputting.length !==0">
-						<div class="nbnhhsh-inputting-list">
-							<h5>有可能是</h5>
-							<span class="nbnhhsh-inputting-item" v-for="input in tag.inputting">{{input}}</span>
-						</div>
-					</div>
-					<div class="nbnhhsh-notran-box" v-else @click.prevent="submitTran(tag.name)">
-						尚未录入，我来提交对应文字
-					</div>
-					<a v-if="tag.trans!==null" @click.prevent="submitTran(tag.name)" class="nbnhhsh-add-btn" title="我来提交对应文字"></a>
-				</div>
-			</div>
-			<div class="nbnhhsh-loading" v-else-if="text">
-				没有匹配到拼音首字母缩写
-			</div>
-		</div>
-	</div>
-	<div class="content-box">
-		<h2>为什么做这东西？</h2>
-		<p>社交平台上通过拼音首字母缩写指代特定词句的情况越来越多，为了让更多人能勉强理解这一门另类沟通方式、做了这一个划词转义工具。</p>
-	</div>
+  <h1>🕒 本周工作时长记录器</h1>
 
-	<script src="https://cdn.jsdelivr.net/npm/vue@2.6.11/dist/vue.min.js"></script>
-	<script src="https://lab.magiconch.com/nbnhhsh/nbnhhsh.user.js"></script>
-	<script>
-		let guessTimer;
-		const app = new Vue({
-			el,
-			data: {
-				text:'',
-				tags:[],
-				waiting:false,
-				loading:false,
-			},
-			methods: {
-				...Nbnhhsh,
-				nbnhhsh(){
-					clearTimeout(guessTimer);
-					guessTimer = setTimeout(_=>{
-						let text = this.text;
+  <div class="summary">
+    <div>🎯 本周目标：<strong>50 小时</strong></div>
+    <div>✅ 已完成：<strong id="total-time">0 小时</strong></div>
+    <div>⏳ 还需：<strong id="remaining-time">50 小时</strong></div>
+    <div>📍 预计周五可在 <strong id="predicted-off">--:--</strong> 下班</div>
+  </div>
 
-						// app.waiting = false;
+  <div>
+    <button onclick="startWork()">🟢 开始工作</button>
+    <button onclick="endWork()">🔴 结束工作</button>
+  </div>
 
-						if(!text || !/[a-z0-9]{2,}/i.test(text)) return app.tags = [];
+  <h2>📅 打卡记录（点击修改时间）</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>日期</th>
+        <th>上班</th>
+        <th>下班</th>
+        <th>时长</th>
+        <th>操作</th>
+      </tr>
+    </thead>
+    <tbody id="record-table"></tbody>
+  </table>
 
-						app.loading = true;
-						this.guess(text,data=>{
-							app.loading = false;
-							if(!data.length){
-								app.show = false;
-							}else{
-								app.tags = data;
-							}
-						});
-					},400);
+  <h2>🕑 时分差计算器</h2>
+  <div>
+    开始时间：<input type="time" id="diff-start" />　
+    结束时间：<input type="time" id="diff-end" />
+    <button onclick="calculateDiff()">计算差值</button>
+  </div>
+  <div>时间差：<span id="diff-result">0 小时 0 分钟</span></div>
 
-					// location.hash = text?'#/text/'+encodeURIComponent(text):'';
-				}
-			}
-		});
+  <script>
+    const WEEK_TARGET_MINUTES = 50 * 60; // 50小时换算成分钟
+    const workData = JSON.parse(localStorage.getItem('workData') || '{}');
 
-		const searchStringArray = location.hash.substr(2).split('/');
+    // 保存数据并刷新页面
+    function saveData() {
+      localStorage.setItem('workData', JSON.stringify(workData));
+      renderTable();
+    }
 
-		const Search = {};
+    // 格式化分钟数为 “X小时 Y分钟”
+    function formatDuration(totalMinutes) {
+      const h = Math.floor(totalMinutes / 60);
+      const m = totalMinutes % 60;
+      return `${h} 小时${m > 0 ? ' ' + m + ' 分钟' : ''}`;
+    }
 
-		for(let i = 0;i<searchStringArray.length;i+=2){
-			Search[decodeURIComponent(searchStringArray[i])] = decodeURIComponent(searchStringArray[i+1]);
-		}
+    // 计算两个 ISO 时间字符串的分钟差
+    function calcDurationMinutes(startISO, endISO) {
+      const diffMs = new Date(endISO) - new Date(startISO);
+      return Math.max(Math.round(diffMs / 60000), 0);
+    }
 
+    // 获取本周周一到周五日期字符串数组（格式 YYYY-MM-DD）
+    function getWeekDates() {
+      const monday = new Date();
+      const day = monday.getDay() || 7;
+      if(day !== 1) monday.setDate(monday.getDate() - day + 1);
+      const dates = [];
+      for(let i=0; i<5; i++) {
+        const d = new Date(monday);
+        d.setDate(monday.getDate() + i);
+        dates.push(d.toISOString().slice(0,10));
+      }
+      return dates;
+    }
 
-		app.text = Search.text || '';
+    // 返回周几标签
+    function getDayLabel(index) {
+      return ['(周一)','(周二)','(周三)','(周四)','(周五)'][index] || '';
+    }
 
-		app.nbnhhsh();
+    // 点击“开始工作”按钮，记录当前时间为上班时间
+    function startWork() {
+      const now = new Date();
+      const key = now.toISOString().slice(0,10);
+      workData[key] = workData[key] || {};
+      workData[key].start = now.toISOString();
+      saveData();
+    }
 
+    // 点击“结束工作”按钮，记录当前时间为下班时间
+    function endWork() {
+      const now = new Date();
+      const key = now.toISOString().slice(0,10);
+      if(!workData[key] || !workData[key].start) {
+        alert('请先打上班卡');
+        return;
+      }
+      workData[key].end = now.toISOString();
+      saveData();
+    }
 
-		const loadScript = (src,onLoad=_=>{},el) =>{
-			el = document.createElement('script');
-			el.src = src;
-			el.onload = onLoad;
-			document.body.appendChild(el);
-		};
+    // 删除某一天数据
+    function deleteRecord(date) {
+      if(confirm(`确认删除 ${date} 的记录？`)) {
+        delete workData[date];
+        saveData();
+      }
+    }
 
-		window._hmt = [];
-		const gtmId = 'G-13BQC1VDD8';
-		window.dataLayer = [
-			['js', new Date()],
-			['config', gtmId]
-		];
-		window.gtag = function(){dataLayer.push(arguments)};
-		setTimeout(_=>{
-			loadScript('https://hm.baidu.com/hm.js?f4e477c61adf5c145ce938a05611d5f0');
-			loadScript('https://www.googletagmanager.com/gtag/js?id='+gtmId);
-			loadScript('https://sdk.51.la/js-sdk-pro.min.js',_=>{
-				LA.init({id: "JgPCvOAtY0gH7fbQ",ck: "JgPCvOAtY0gH7fbQ",autoTrack:true,hashMode:true})
-			})
-		},1400);
-	</script>
+    // 点击时间单元格时，替换成input让用户编辑，编辑失焦保存
+    function editTime(date, type, event) {
+      const td = event.target;
+      const currentVal = td.innerText === '点击填写' ? '' : td.innerText;
+      td.innerHTML = `<input class="inline-edit" type="time" value="${currentVal}" />`;
+      const input = td.querySelector('input');
+      input.focus();
+      // 监听失焦和回车保存
+      function saveHandler() {
+        saveTime(date, type, input.value);
+      }
+      input.addEventListener('blur', saveHandler);
+      input.addEventListener('keydown', e => {
+        if(e.key === 'Enter') {
+          input.blur();
+        } else if(e.key === 'Escape') {
+          renderTable(); // 放弃修改，恢复显示
+        }
+      });
+    }
+
+    // 保存编辑时间并刷新
+    function saveTime(date, type, value) {
+      if(!value) {
+        renderTable();
+        return;
+      }
+      // 拼接成完整ISO时间字符串
+      const isoStr = `${date}T${value}:00`;
+      workData[date] = workData[date] || {};
+      workData[date][type] = new Date(isoStr).toISOString();
+      saveData();
+    }
+
+    // 渲染打卡记录表格和统计数据
+    function renderTable() {
+      const tbody = document.getElementById('record-table');
+      tbody.innerHTML = '';
+      const dates = getWeekDates();
+      let totalMinutes = 0;
+
+      dates.forEach((date, i) => {
+        const record = workData[date] || {};
+        let startStr = record.start ? new Date(record.start).toTimeString().slice(0,5) : '';
+        let endStr = record.end ? new Date(record.end).toTimeString().slice(0,5) : '';
+        let durStr = '';
+        let durMin = 0;
+
+        if(record.start && record.end) {
+          durMin = calcDurationMinutes(record.start, record.end);
+          durStr = formatDuration(durMin);
+          totalMinutes += durMin;
+        }
+
+        tbody.innerHTML += `
+          <tr>
+            <td>${date} ${getDayLabel(i)}</td>
+            <td class="editable" onclick="editTime('${date}', 'start', event)">${startStr || '点击填写'}</td>
+            <td class="editable" onclick="editTime('${date}', 'end', event)">${endStr || '点击填写'}</td>
+            <td>${durStr}</td>
+            <td><span class="delete-btn" onclick="deleteRecord('${date}')">删除</span></td>
+          </tr>
+        `;
+      });
+
+      const remainMin = Math.max(WEEK_TARGET_MINUTES - totalMinutes, 0);
+      document.getElementById('total-time').innerText = formatDuration(totalMinutes);
+      document.getElementById('remaining-time').innerText = remainMin > 0 ? formatDuration(remainMin) : '已达成';
+
+      // 预计周五下班时间
+      const friday = dates[4];
+      const fridayRecord = workData[friday] || {};
+      if(!fridayRecord.start) {
+        document.getElementById('predicted-off').innerText = '--:--（请先填写周五上班时间）';
+      } else {
+        const startFri = new Date(fridayRecord.start);
+        const predictedOff = new Date(startFri.getTime() + remainMin * 60 * 1000);
+        const hh = predictedOff.getHours().toString().padStart(2,'0');
+        const mm = predictedOff.getMinutes().toString().padStart(2,'0');
+        document.getElementById('predicted-off').innerText = `${hh}:${mm}`;
+      }
+    }
+
+    // 时分差计算器
+    function calculateDiff() {
+      const startVal = document.getElementById('diff-start').value;
+      const endVal = document.getElementById('diff-end').value;
+      if(!startVal || !endVal) {
+        alert('请填写开始时间和结束时间');
+        return;
+      }
+      const [sh, sm] = startVal.split(':').map(Number);
+      const [eh, em] = endVal.split(':').map(Number);
+      let startTotal = sh * 60 + sm;
+      let endTotal = eh * 60 + em;
+      // 如果结束时间小于开始时间，默认第二天
+      if(endTotal < startTotal) endTotal += 24 * 60;
+      const diff = endTotal - startTotal;
+      document.getElementById('diff-result').innerText = formatDuration(diff);
+    }
+
+    renderTable();
+  </script>
 </body>
 </html>
